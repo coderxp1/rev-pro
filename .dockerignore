@@ -1,3 +1,4 @@
+# Build context hygiene: keep secrets, VCS data and host-only files out of the image.
 node_modules
 .next
 *.tsbuildinfo
@@ -9,8 +10,24 @@ test-langdock.ts
 tsconfig.tsbuildinfo
 vps_id_rsa
 vps_id_rsa_backup
+*.pem
+*.key
+id_rsa*
 project.zip
 assets
 supabase
 scripts
-.env.local
+
+# Secrets never enter the build context. Runtime values come from compose
+# `env_file`; public build-time values come from compose `build.args`.
+.env
+.env.*
+
+# Host-only deployment files
+Dockerfile
+docker-compose.yml
+deploy.sh
+nginx
+transcribe.py
+supabase_email_template.html
+*.md
