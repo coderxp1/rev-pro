@@ -1,10 +1,22 @@
 services:
   rev-pro:
-    build: .
+    build:
+      context: .
+      # Public build-time configuration. Interpolated from .env.production when
+      # compose is invoked with `--env-file .env.production` (deploy.sh does this).
+      # Only NEXT_PUBLIC_* values belong here - they end up in the browser bundle.
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required - run compose with --env-file .env.production}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?NEXT_PUBLIC_SUPABASE_ANON_KEY is required - run compose with --env-file .env.production}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://rev-pro.dev}
     container_name: rev-pro-app
     restart: always
-    ports:
-      - "3000:3000"
+    # Reachable only from nginx on the internal network. Not published on the
+    # host, so API routes / webhooks cannot bypass TLS termination.
+    expose:
+      - "3000"
+    # Runtime secrets (Supabase service role, Stripe, Langdock, ...) are passed
+    # here and never baked into the image.
     env_file:
       - .env.production
     networks:
@@ -18,9 +30,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      - certbot-etc:/etc/nginx/ssl
-      - certbot-www:/var/www/certbot
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot-etc:/etc/nginx/ssl:ro
+      - certbot-www:/var/www/certbot:ro
     depends_on:
       - rev-pro
     networks:
@@ -29,6 +41,11 @@ services:
   certbot:
     image: certbot/certbot
     container_name: rev-pro-certbot
+    # One-shot job. The profile keeps `docker compose up -d` from re-running
+    # `certonly --force-renewal` on every deploy (Let's Encrypt rate limits).
+    # deploy.sh runs it explicitly with `compose run --rm certbot` when needed.
+    profiles:
+      - bootstrap
     volumes:
       - certbot-etc:/etc/letsencrypt
       - certbot-www:/var/www/certbot
